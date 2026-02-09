@@ -7,6 +7,7 @@ const {
 
 const NOME_CANAL_UPDATES = '📢・updates';
 
+// --- Função para criar/buscar o canal ---
 async function garantirCanalUpdates(guild) {
     let canal = guild.channels.cache.find(c => c.name === NOME_CANAL_UPDATES);
 
@@ -14,8 +15,8 @@ async function garantirCanalUpdates(guild) {
         const cargoTI = guild.roles.cache.find(r => r.name.includes('T.I'));
 
         const permissoes = [
-            { id: guild.id, deny: [PermissionsBitField.Flags.SendMessages], allow: [PermissionsBitField.Flags.ViewChannel] },
-            { id: guild.client.user.id, allow: [PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ViewChannel] }
+            { id: guild.id, deny: [PermissionsBitField.Flags.SendMessages], allow: [PermissionsBitField.Flags.ViewChannel] }, // Ninguém fala
+            { id: guild.client.user.id, allow: [PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ViewChannel] } // Bot fala
         ];
 
         if (cargoTI) {
@@ -31,49 +32,38 @@ async function garantirCanalUpdates(guild) {
     return canal;
 }
 
+// --- Função Principal ---
 async function publicarUpdate(message) {
     const args = message.content.split('\n');
-
-    // 1. Captura Inteligente do Título
-    // Pega tudo que vem depois de "!update" na primeira linha
     const primeiraLinha = args[0];
     const tituloPersonalizado = primeiraLinha.replace('!update', '').trim();
 
     if (!tituloPersonalizado) {
-        return message.reply('❌ Digite o título/versão após o comando. Ex: `!update v1.0 - Correções`');
+        return message.reply('❌ Digite o título após o comando. Ex: `!update v1.0 - Correções`');
     }
 
     let corpo = args.slice(1).join('\n');
     if (!corpo) return message.reply('❌ O update precisa de conteúdo nas linhas abaixo.');
 
-    // 2. Formatação Profissional (Mapeamento de Símbolos)
+    // --- Formatação Inteligente ---
     const corpoFormatado = corpo
         .split('\n')
         .map(linha => {
             const texto = linha.trim();
-
-            // Novos Recursos (+)
             if (texto.startsWith('+')) return `🆕 ${texto.substring(1).trim()}`;
-
-            // Melhorias/Otimizações (~)
             if (texto.startsWith('~')) return `⚡ ${texto.substring(1).trim()}`;
-
-            // Correções/Remoções (-)
-            if (texto.startsWith('-')) return `🐞 ${texto.substring(1).trim()}`; // Mudei para Joaninha (Bug fix)
-
-            // Se for um título de seção (termina com : ou tem parênteses), deixa em Negrito
+            if (texto.startsWith('-')) return `🐞 ${texto.substring(1).trim()}`;
             if (texto.length > 0 && (texto.endsWith(':') || texto.includes('('))) {
-                return `\n**${texto}**`; // Adiciona quebra de linha antes para separar
+                return `\n**${texto}**`;
             }
-
             return linha;
         })
         .join('\n');
 
-    // 3. Criar o Embed
+    // --- Criação do Embed ---
     const embedUpdate = new EmbedBuilder()
         .setColor(0x2ECC71) // Verde Esmeralda
-        .setTitle(`🚀 Update Log: ${tituloPersonalizado}`) // Usa o teu título completo
+        .setTitle(`🚀 Update Log: ${tituloPersonalizado}`)
         .setDescription(corpoFormatado)
         .setThumbnail(message.guild.iconURL())
         .setFooter({ text: `Publicado por ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
@@ -81,13 +71,24 @@ async function publicarUpdate(message) {
 
     try {
         const canalUpdates = await garantirCanalUpdates(message.guild);
-        await canalUpdates.send({ embeds: [embedUpdate] });
 
-        // Feedback silencioso (emoji na mensagem original)
+        // --- ENVIO DA MENSAGEM ---
+        // Aqui está a mudança: content tem o @everyone, embeds tem o cartão
+        const mensagemEnviada = await canalUpdates.send({
+            content: '📢 **Atenção** @everyone, nova atualização do sistema!',
+            embeds: [embedUpdate]
+        });
+
+        // --- REAÇÕES AUTOMÁTICAS ---
+        await mensagemEnviada.react('🚀'); // Foguetinho
+        await mensagemEnviada.react('🔥'); // Foguinho (Opcional, dá um charme)
+
+        // Feedback para quem mandou o comando
         await message.react('✅');
+
     } catch (erro) {
         console.error(erro);
-        message.reply('Houve um erro ao publicar o update.');
+        message.reply('Houve um erro ao publicar o update. Verifique se tenho permissão para mencionar everyone.');
     }
 }
 
